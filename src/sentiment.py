@@ -11,17 +11,20 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 class SentimentEngine:
-    def __init__(self):
-        """Initialize and load FINTER universe mapping"""
-        logger.info("📡 Loading universe mapping...")
+    def __init__(self, max_securities: int = 500):
+        """
+        Initialize and load FINTER ticker->gvkeyiid mapping
 
-        self.universe_df = finter.get_universe()
+        Args:
+            max_securities: Max securities to map (default 500 for speed)
+        """
+        logger.info("📡 Building ticker mapping...")
 
-        # Create mapping: ticker -> gvkeyiid
-        self.ticker_to_gvkeyiid = dict(zip(
-            self.universe_df['tic'].astype(str),
-            self.universe_df['gvkeyiid'].astype(str)
-        ))
+        # Use the build_ticker_mapping method which properly converts gvkeyiid to tickers
+        self.ticker_to_gvkeyiid = finter.build_ticker_mapping(
+            max_securities=max_securities,
+            use_cache=True
+        )
 
         logger.info(f"✅ Loaded {len(self.ticker_to_gvkeyiid)} ticker mappings")
 

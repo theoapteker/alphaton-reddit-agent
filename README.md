@@ -152,24 +152,29 @@ python main.py
 
 This will:
 1. Scrape Reddit for stock mentions (last 7 days)
-2. Analyze sentiment using TextBlob
+2. Initialize sentiment engine with ticker->gvkeyiid mapping
 3. Map tickers to FINTER gvkeyiid format
-4. Generate FINTER-compliant alpha signals
+4. Analyze sentiment using TextBlob
+5. Generate FINTER-compliant alpha signals
 
 ### Basic Alpha Generation (Programmatic)
 
 ```python
 from src.sentiment import SentimentEngine
 from src.alpha import RedditSentimentAlpha
+import pandas as pd
 
-# Initialize sentiment engine
-engine = SentimentEngine()
+# Initialize sentiment engine (builds ticker->gvkeyiid mapping)
+engine = SentimentEngine(max_securities=500)
 
 # Load Reddit mentions data (from scraper)
 mentions_df = pd.read_csv('reddit_mentions.csv')
 
 # Map to FINTER format
-sentiment_df = engine.map_to_gvkeyiid(mentions_df)
+finter_df = engine.map_to_gvkeyiid(mentions_df)
+
+# Analyze sentiment
+sentiment_df = engine.calculate_daily_sentiment(finter_df)
 
 # Create alpha strategy
 alpha = RedditSentimentAlpha(sentiment_df, leverage=1.0)

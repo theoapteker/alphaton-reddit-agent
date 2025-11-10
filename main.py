@@ -4,8 +4,10 @@ Alphaton Reddit Agent - Main Entry Point
 
 This script demonstrates the complete workflow:
 1. Scrape Reddit for stock mentions
-2. Analyze sentiment
-3. Generate FINTER-compliant alpha signals
+2. Initialize sentiment engine with ticker->gvkeyiid mapping
+3. Map tickers to FINTER gvkeyiid format
+4. Analyze sentiment
+5. Generate FINTER-compliant alpha signals
 """
 
 import sys
@@ -50,28 +52,18 @@ def main():
         print(f"\n✅ Found {len(mentions_df)} ticker mentions across {len(posts_df)} posts")
         print()
 
-        # Step 2: Analyze sentiment
-        print("🧠 STEP 2: Analyzing sentiment...")
+        # Step 2: Initialize sentiment engine
+        print("🧠 STEP 2: Initializing sentiment engine...")
         print("-" * 70)
 
-        engine = SentimentEngine()
-        sentiment_df = engine.analyze_sentiment(mentions_df)
-
-        print(f"✅ Analyzed sentiment for {len(sentiment_df)} mentions")
+        engine = SentimentEngine(max_securities=500)
         print()
-
-        # Show top sentiment scores
-        if not sentiment_df.empty:
-            print("📊 Top 5 Most Positive Sentiment:")
-            top_positive = sentiment_df.nlargest(5, 'sentiment')[['ticker', 'sentiment', 'score']]
-            print(top_positive.to_string(index=False))
-            print()
 
         # Step 3: Map to FINTER format
         print("🗺️  STEP 3: Mapping tickers to FINTER gvkeyiid...")
         print("-" * 70)
 
-        finter_df = engine.map_to_gvkeyiid(sentiment_df)
+        finter_df = engine.map_to_gvkeyiid(mentions_df)
 
         if finter_df.empty:
             print("⚠️  Could not map any tickers to FINTER universe")
@@ -80,11 +72,27 @@ def main():
         print(f"✅ Mapped {len(finter_df)} mentions to FINTER format")
         print()
 
-        # Step 4: Generate alpha signals
-        print("📈 STEP 4: Generating FINTER-compliant alpha signals...")
+        # Step 4: Analyze sentiment
+        print("📊 STEP 4: Analyzing sentiment...")
         print("-" * 70)
 
-        alpha = RedditSentimentAlpha(finter_df, leverage=1.0)
+        sentiment_df = engine.calculate_daily_sentiment(finter_df)
+
+        print(f"✅ Analyzed sentiment for {len(sentiment_df)} daily records")
+        print()
+
+        # Show top sentiment scores
+        if not sentiment_df.empty:
+            print("📈 Top 5 Most Positive Sentiment:")
+            top_positive = sentiment_df.nlargest(5, 'sentiment')[['ticker', 'sentiment', 'mention_count']]
+            print(top_positive.to_string(index=False))
+            print()
+
+        # Step 5: Generate alpha signals
+        print("📈 STEP 5: Generating FINTER-compliant alpha signals...")
+        print("-" * 70)
+
+        alpha = RedditSentimentAlpha(sentiment_df, leverage=1.0)
 
         # Generate positions for the date range
         start_date_finter = int(start_date.strftime("%Y%m%d"))
@@ -136,9 +144,10 @@ def main():
         print("  2. Check that all dependencies are installed:")
         print("     pip install -r requirements.txt")
         print()
-        print("  3. Verify your Reddit API credentials in .env file")
-        print("     (Required: REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET,")
-        print("      REDDIT_USERNAME, REDDIT_PASSWORD)")
+        print("  3. Verify your credentials in .env file:")
+        print("     Reddit API: REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET,")
+        print("                 REDDIT_USERNAME, REDDIT_PASSWORD")
+        print("     FINTER API: FINTER_JWT_TOKEN")
         print()
 
         import traceback
