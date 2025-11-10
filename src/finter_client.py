@@ -61,12 +61,17 @@ class FinterAPI:
         response.raise_for_status()
         return response.json()
     
-    def build_ticker_mapping(self, max_securities: int = 500, use_cache: bool = True) -> dict:
+    def build_ticker_mapping(self, max_securities: int = 500, use_cache: bool = True, date: str = None) -> dict:
         if use_cache and self._ticker_to_gvkeyiid_cache is not None:
             logger.info(f"✅ Using cached ticker mapping ({len(self._ticker_to_gvkeyiid_cache)} tickers)")
             return self._ticker_to_gvkeyiid_cache
 
         logger.info("📡 Building ticker mapping from universe...")
+
+        # Use provided date or default to a recent date
+        if date is None:
+            from datetime import datetime
+            date = datetime.now().strftime("%Y%m%d")
 
         universe_df = self.get_universe(region="usa", type_stock="stock", vendor="spglobal")
         if max_securities and len(universe_df) > max_securities:
@@ -86,6 +91,7 @@ class FinterAPI:
                 "to": "short_code",      # ✅ underscore!
                 "source": source_str,
                 "universe": 0,
+                "date": date,            # ✅ date parameter required
             }
 
             try:
@@ -133,11 +139,16 @@ class FinterAPI:
 
         return short_code
     
-    def discover_convert_shape(self, sample_entity_id: str):
+    def discover_convert_shape(self, sample_entity_id: str, date: str = None):
             """
             Try a bunch of plausible param names for /id/convert and return the one that works.
             Returns: (method, from_key, to_key)
             """
+            # Use provided date or default to current date
+            if date is None:
+                from datetime import datetime
+                date = datetime.now().strftime("%Y%m%d")
+
             candidates = [
                 ("get",  "from",      "to"),
                 ("get",  "from_code", "to_code"),
@@ -153,6 +164,7 @@ class FinterAPI:
                     to_key: "short_code",
                     "source": sample_entity_id,
                     "universe": 0,
+                    "date": date,
                 }
                 try:
                     if method == "get":
