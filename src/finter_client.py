@@ -40,12 +40,15 @@ class FinterAPI:
     def get(self, endpoint: str, params: dict = None):
         url = f"{self.base_url}{endpoint}"
         response = requests.get(url, headers=self.headers, params=params, timeout=30)
-        
+
         if response.status_code == 401:
             raise Exception("❌ JWT authentication failed!")
         if response.status_code in [400, 405]:
-            raise Exception(f"❌ Error {response.status_code}: {response.json().get('message')}")
-        
+            error_msg = response.json().get('message', 'Unknown error')
+            # Log the full error details for debugging
+            logger.debug(f"API Error {response.status_code} for {endpoint}: params={params}, response={response.json()}")
+            raise Exception(f"❌ Error {response.status_code}: {error_msg}")
+
         response.raise_for_status()
         return response.json()
     
@@ -61,12 +64,17 @@ class FinterAPI:
         response.raise_for_status()
         return response.json()
     
-    def build_ticker_mapping(self, max_securities: int = 500, use_cache: bool = True) -> dict:
+    def build_ticker_mapping(self, max_securities: int = 500, use_cache: bool = True, date: str = None) -> dict:
         if use_cache and self._ticker_to_gvkeyiid_cache is not None:
             logger.info(f"✅ Using cached ticker mapping ({len(self._ticker_to_gvkeyiid_cache)} tickers)")
             return self._ticker_to_gvkeyiid_cache
 
         logger.info("📡 Building ticker mapping from universe...")
+
+        # Use provided date or default to a recent date
+        if date is None:
+            from datetime import datetime
+            date = datetime.now().strftime("%Y%m%d")
 
         universe_df = self.get_universe(region="usa", type_stock="stock", vendor="spglobal")
         if max_securities and len(universe_df) > max_securities:
@@ -82,10 +90,11 @@ class FinterAPI:
             source_str = ",".join(batch)
 
             params = {
-                "from": "entity_id",     # ✅ per your own doc
-                "to": "short_code",      # ✅ underscore!
+                "from": "entity_id",
+                "to": "shortcode",       # No underscore per API mapping table
                 "source": source_str,
                 "universe": 0,
+                "date": date,
             }
 
             try:
@@ -133,11 +142,16 @@ class FinterAPI:
 
         return short_code
     
-    def discover_convert_shape(self, sample_entity_id: str):
+    def discover_convert_shape(self, sample_entity_id: str, date: str = None):
             """
             Try a bunch of plausible param names for /id/convert and return the one that works.
             Returns: (method, from_key, to_key)
             """
+            # Use provided date or default to current date
+            if date is None:
+                from datetime import datetime
+                date = datetime.now().strftime("%Y%m%d")
+
             candidates = [
                 ("get",  "from",      "to"),
                 ("get",  "from_code", "to_code"),
@@ -150,9 +164,10 @@ class FinterAPI:
             for method, from_key, to_key in candidates:
                 payload = {
                     from_key: "entity_id",
-                    to_key: "short_code",
+                    to_key: "shortcode",
                     "source": sample_entity_id,
                     "universe": 0,
+                    "date": date,
                 }
                 try:
                     if method == "get":
