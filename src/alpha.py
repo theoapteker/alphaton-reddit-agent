@@ -112,8 +112,19 @@ class RedditSentimentAlpha:
         logger.info("🔍 Running start-end validation...")
 
         # Generate positions with two different start dates
-        pos1 = self.get(start - 100, end)  # Extra 100 days lookback
-        pos2 = self.get(start - 50, end)   # Extra 50 days lookback
+        # Use proper date arithmetic to avoid invalid dates (e.g., 20240101 - 100 = 20240001)
+        start_date = pd.to_datetime(str(start), format='%Y%m%d')
+
+        # Create earlier start dates for validation
+        earlier_start1 = start_date - pd.Timedelta(days=100)
+        earlier_start2 = start_date - pd.Timedelta(days=50)
+
+        # Convert back to YYYYMMDD format
+        start1_int = int(earlier_start1.strftime('%Y%m%d'))
+        start2_int = int(earlier_start2.strftime('%Y%m%d'))
+
+        pos1 = self.get(start1_int, end)  # Extra 100 days lookback
+        pos2 = self.get(start2_int, end)   # Extra 50 days lookback
 
         # Find overlapping period
         overlap_start = max(pos1.index.min(), pos2.index.min())
