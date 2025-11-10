@@ -89,12 +89,12 @@ class FinterAPI:
             batch = gvkeyiids[i:i+batch_size]
             source_str = ",".join(batch)
 
+            # Try without date parameter first (it's optional per docs)
             params = {
-                "from": "id",            # Per example and mapping table
-                "to": "shortcode",       # Per mapping table (no underscore)
+                "from": "id",            # Per example curl command
+                "to": "isin",            # Per example curl command
                 "source": source_str,
                 "universe": 0,
-                "date": date,            # Historical date
             }
 
             try:
