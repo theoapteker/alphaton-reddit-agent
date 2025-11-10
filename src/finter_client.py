@@ -40,12 +40,15 @@ class FinterAPI:
     def get(self, endpoint: str, params: dict = None):
         url = f"{self.base_url}{endpoint}"
         response = requests.get(url, headers=self.headers, params=params, timeout=30)
-        
+
         if response.status_code == 401:
             raise Exception("❌ JWT authentication failed!")
         if response.status_code in [400, 405]:
-            raise Exception(f"❌ Error {response.status_code}: {response.json().get('message')}")
-        
+            error_msg = response.json().get('message', 'Unknown error')
+            # Log the full error details for debugging
+            logger.debug(f"API Error {response.status_code} for {endpoint}: params={params}, response={response.json()}")
+            raise Exception(f"❌ Error {response.status_code}: {error_msg}")
+
         response.raise_for_status()
         return response.json()
     
@@ -87,11 +90,11 @@ class FinterAPI:
             source_str = ",".join(batch)
 
             params = {
-                "from": "entity_id",     # ✅ per your own doc
-                "to": "short_code",      # ✅ underscore!
+                "from": "entity_id",
+                "to": "shortcode",       # No underscore per API mapping table
                 "source": source_str,
                 "universe": 0,
-                "date": date,            # ✅ date parameter required
+                "date": date,
             }
 
             try:
@@ -161,7 +164,7 @@ class FinterAPI:
             for method, from_key, to_key in candidates:
                 payload = {
                     from_key: "entity_id",
-                    to_key: "short_code",
+                    to_key: "shortcode",
                     "source": sample_entity_id,
                     "universe": 0,
                     "date": date,
