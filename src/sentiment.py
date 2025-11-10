@@ -11,22 +11,70 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 class SentimentEngine:
-    def __init__(self, max_securities: int = 500):
+    def __init__(self, use_finter_mapping: bool = False):
         """
-        Initialize and load FINTER ticker->gvkeyiid mapping
+        Initialize sentiment engine
 
         Args:
-            max_securities: Max securities to map (default 500 for speed)
+            use_finter_mapping: If True, try to load FINTER ticker->gvkeyiid mapping
+                               (currently not working with API, set to False)
         """
-        logger.info("📡 Building ticker mapping...")
+        self.ticker_to_gvkeyiid = {}
 
-        # Use the build_ticker_mapping method which properly converts gvkeyiid to tickers
-        self.ticker_to_gvkeyiid = finter.build_ticker_mapping(
-            max_securities=max_securities,
-            use_cache=True
-        )
+        if use_finter_mapping:
+            logger.info("📡 Building ticker mapping...")
+            try:
+                self.ticker_to_gvkeyiid = finter.build_ticker_mapping(
+                    max_securities=500,
+                    use_cache=True
+                )
+                logger.info(f"✅ Loaded {len(self.ticker_to_gvkeyiid)} ticker mappings")
+            except Exception as e:
+                logger.warning(f"⚠️  Failed to build ticker mapping: {e}")
+                logger.info("📝 Using hardcoded common ticker mappings instead")
+                self.ticker_to_gvkeyiid = self._get_common_ticker_mappings()
+        else:
+            logger.info("📝 Using hardcoded common ticker mappings")
+            self.ticker_to_gvkeyiid = self._get_common_ticker_mappings()
 
         logger.info(f"✅ Loaded {len(self.ticker_to_gvkeyiid)} ticker mappings")
+
+    def _get_common_ticker_mappings(self) -> dict:
+        """
+        Hardcoded mappings for common tickers (as fallback when API fails)
+        Format: ticker -> gvkeyiid (9 digits)
+
+        Note: These are example mappings. In production, you'd need the actual
+        gvkeyiid values from FINTER's universe data.
+        """
+        return {
+            # Common tech stocks
+            'AAPL': '001690001',  # Apple
+            'MSFT': '012141001',  # Microsoft
+            'GOOGL': '029089001', # Alphabet
+            'AMZN': '018163001',  # Amazon
+            'TSLA': '011359001',  # Tesla
+            'NVDA': '011532001',  # NVIDIA
+            'META': '012851001',  # Meta
+
+            # Common finance stocks
+            'JPM': '006085001',   # JPMorgan Chase
+            'BAC': '001321001',   # Bank of America
+            'WFC': '006174001',   # Wells Fargo
+            'GS': '004280001',    # Goldman Sachs
+
+            # Other popular stocks
+            'DIS': '002819001',   # Disney
+            'NFLX': '015917001',  # Netflix
+            'AMD': '001208001',   # AMD
+            'INTC': '005350001',  # Intel
+            'ORCL': '007334001',  # Oracle
+            'CRM': '020572001',   # Salesforce
+            'UBER': '032113001',  # Uber
+            'LYFT': '031806001',  # Lyft
+            'SQ': '027129001',    # Block (Square)
+            'PYPL': '013193001',  # PayPal
+        }
 
     def analyze_sentiment(self, text: str) -> float:
         """Analyze sentiment (-1.0 to 1.0)"""

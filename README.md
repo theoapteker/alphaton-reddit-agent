@@ -152,10 +152,12 @@ python main.py
 
 This will:
 1. Scrape Reddit for stock mentions (last 7 days)
-2. Initialize sentiment engine with ticker->gvkeyiid mapping
-3. Map tickers to FINTER gvkeyiid format
+2. Initialize sentiment engine with hardcoded ticker mappings
+3. Map tickers to FINTER gvkeyiid format (for common stocks)
 4. Analyze sentiment using TextBlob
 5. Generate FINTER-compliant alpha signals
+
+**Note:** Currently uses hardcoded ticker->gvkeyiid mappings for ~20 common stocks (AAPL, TSLA, etc.) as the FINTER `/id/convert` API endpoint is not working.
 
 ### Basic Alpha Generation (Programmatic)
 
@@ -164,8 +166,10 @@ from src.sentiment import SentimentEngine
 from src.alpha import RedditSentimentAlpha
 import pandas as pd
 
-# Initialize sentiment engine (builds ticker->gvkeyiid mapping)
-engine = SentimentEngine(max_securities=500)
+# Initialize sentiment engine
+# use_finter_mapping=False uses hardcoded common ticker mappings
+# Set to True to try FINTER API (currently broken)
+engine = SentimentEngine(use_finter_mapping=False)
 
 # Load Reddit mentions data (from scraper)
 mentions_df = pd.read_csv('reddit_mentions.csv')

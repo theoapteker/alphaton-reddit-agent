@@ -56,7 +56,9 @@ def main():
         print("🧠 STEP 2: Initializing sentiment engine...")
         print("-" * 70)
 
-        engine = SentimentEngine(max_securities=500)
+        # Note: use_finter_mapping=False uses hardcoded ticker mappings
+        # Set to True to try the FINTER API (currently not working)
+        engine = SentimentEngine(use_finter_mapping=False)
         print()
 
         # Step 3: Map to FINTER format
