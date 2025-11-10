@@ -9,8 +9,10 @@ import pandas as pd
 from dotenv import load_dotenv
 import logging
 import time
+import json
+from pathlib import Path
 
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 load_dotenv()
@@ -19,16 +21,17 @@ class FinterAPI:
     def __init__(self):
         self.base_url = "https://api.finter.quantit.io"
         self.token = os.getenv("FINTER_JWT_TOKEN")
-        
+
         if not self.token:
             raise ValueError("❌ FINTER_JWT_TOKEN not found")
-        
+
         self.headers = {"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"}
         logger.info(f"✅ Token loaded ({len(self.token)} chars)")
         self._test_connection()
-        
-        # Cache for ticker mappings
-        self._ticker_to_gvkeyiid_cache = None
+
+        # Load static ticker mapping from file
+        self._ticker_to_gvkeyiid_cache = self._load_ticker_mapping()
+        logger.info(f"✅ Loaded {len(self._ticker_to_gvkeyiid_cache)} tickers from mapping file")
     
     def _test_connection(self):
         try:
@@ -36,7 +39,23 @@ class FinterAPI:
             logger.info("✅ API connection working!")
         except Exception as e:
             logger.warning(f"⚠️  Test failed: {e}")
-    
+
+    def _load_ticker_mapping(self) -> dict:
+        """Load ticker to gvkeyiid mapping from JSON file"""
+        mapping_file = Path(__file__).parent / "ticker_mapping.json"
+
+        if not mapping_file.exists():
+            logger.warning(f"⚠️  Ticker mapping file not found: {mapping_file}")
+            return {}
+
+        try:
+            with open(mapping_file, 'r') as f:
+                mapping = json.load(f)
+            return mapping
+        except Exception as e:
+            logger.warning(f"⚠️  Failed to load ticker mapping: {e}")
+            return {}
+
     def get(self, endpoint: str, params: dict = None):
         url = f"{self.base_url}{endpoint}"
         response = requests.get(url, headers=self.headers, params=params, timeout=30)
@@ -45,8 +64,6 @@ class FinterAPI:
             raise Exception("❌ JWT authentication failed!")
         if response.status_code in [400, 405]:
             error_msg = response.json().get('message', 'Unknown error')
-            # Log the full error details for debugging
-            logger.debug(f"API Error {response.status_code} for {endpoint}: params={params}, response={response.json()}")
             raise Exception(f"❌ Error {response.status_code}: {error_msg}")
 
         response.raise_for_status()
@@ -65,57 +82,12 @@ class FinterAPI:
         return response.json()
     
     def build_ticker_mapping(self, max_securities: int = 500, use_cache: bool = True, date: str = None) -> dict:
-        if use_cache and self._ticker_to_gvkeyiid_cache is not None:
-            logger.info(f"✅ Using cached ticker mapping ({len(self._ticker_to_gvkeyiid_cache)} tickers)")
-            return self._ticker_to_gvkeyiid_cache
-
-        logger.info("📡 Building ticker mapping from universe...")
-
-        # Use provided date or default to a recent historical date
-        if date is None:
-            # Use a recent past date (API may not accept future dates)
-            date = "20240101"
-
-        universe_df = self.get_universe(region="usa", type_stock="stock", vendor="spglobal")
-        if max_securities and len(universe_df) > max_securities:
-            logger.info(f"   Limiting to first {max_securities} securities for speed")
-            universe_df = universe_df.head(max_securities)
-
-        gvkeyiids = universe_df["gvkeyiid"].astype(str).tolist()
-        ticker_mapping = {}
-        batch_size = 100
-
-        for i in range(0, len(gvkeyiids), batch_size):
-            batch = gvkeyiids[i:i+batch_size]
-            source_str = ",".join(batch)
-
-            # Try without date parameter first (it's optional per docs)
-            params = {
-                "from": "id",            # Per example curl command
-                "to": "isin",            # Per example curl command
-                "source": source_str,
-                "universe": 0,
-            }
-
-            try:
-                logger.debug(f"Calling /id/convert with params: {params}")
-                result = self.get("/id/convert", params=params)
-
-                if "code_mapped" in result:
-                    # result: {"code_mapped": {"001690001": "AAPL", ...}}
-                    for src_id, ticker in result["code_mapped"].items():
-                        if ticker:
-                            ticker_mapping[ticker.upper()] = src_id
-
-                logger.info(f"   Progress: {min(i+batch_size, len(gvkeyiids))}/{len(gvkeyiids)}")
-                time.sleep(0.1)
-            except Exception as e:
-                logger.warning(f"   Batch {i//batch_size} failed: {e}")
-                continue
-
-        logger.info(f"✅ Built mapping: {len(ticker_mapping)} tickers")
-        self._ticker_to_gvkeyiid_cache = ticker_mapping
-        return ticker_mapping
+        """
+        Get ticker to gvkeyiid mapping.
+        Now loads from static file (ticker_mapping.json) instead of API calls.
+        """
+        logger.info(f"✅ Using ticker mapping ({len(self._ticker_to_gvkeyiid_cache)} tickers)")
+        return self._ticker_to_gvkeyiid_cache
 
 
 
