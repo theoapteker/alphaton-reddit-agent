@@ -24,6 +24,8 @@ alphaton-reddit-agent/
 │   ├── sentiment.py       # Sentiment analysis engine with ticker mapping
 │   ├── scraper.py         # Reddit data scraper
 │   └── finter_client.py   # FINTER API client
+├── main.py                # Main entry point for the complete workflow
+├── setup.sh               # Automated setup script
 ├── test_*.py              # Test suites for various components
 ├── requirements.txt       # Python dependencies
 ├── MCP_SERVERS.md        # Documentation for all available MCP servers
@@ -78,6 +80,20 @@ This project integrates with 17+ MCP (Model Context Protocol) servers on the FIN
 
 ## Installation
 
+### Quick Setup (Recommended)
+
+Run the automated setup script:
+```bash
+./setup.sh
+```
+
+This will:
+- Create a virtual environment
+- Install all dependencies including `praw`, `textblob`, `pandas`, etc.
+- Verify Python version compatibility
+
+### Manual Setup
+
 1. Clone the repository:
 ```bash
 git clone <repository-url>
@@ -86,7 +102,7 @@ cd alphaton-reddit-agent
 
 2. Create a virtual environment:
 ```bash
-python -m venv venv
+python3 -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
@@ -95,15 +111,52 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-4. Configure FINTER credentials (if required):
+4. Configure Reddit API credentials:
+Create a `.env` file in the project root:
+```bash
+REDDIT_CLIENT_ID=your_client_id
+REDDIT_CLIENT_SECRET=your_client_secret
+REDDIT_USERNAME=your_username
+REDDIT_PASSWORD=your_password
+```
+
+5. Configure FINTER credentials (if required):
 ```bash
 # Add your FINTER API credentials to environment variables
 export FINTER_API_KEY="your_api_key"
 ```
 
+### ⚠️ Important: Always Activate Virtual Environment
+
+Before running any Python scripts, **always activate the virtual environment**:
+```bash
+source venv/bin/activate  # On Mac/Linux
+# or
+venv\Scripts\activate     # On Windows
+```
+
+If you see `ModuleNotFoundError: No module named 'praw'`, it means you forgot to activate the venv!
+
 ## Usage
 
-### Basic Alpha Generation
+### Quick Start
+
+Run the complete workflow with the main entry point:
+```bash
+# Make sure virtual environment is activated!
+source venv/bin/activate
+
+# Run the complete workflow
+python main.py
+```
+
+This will:
+1. Scrape Reddit for stock mentions (last 7 days)
+2. Analyze sentiment using TextBlob
+3. Map tickers to FINTER gvkeyiid format
+4. Generate FINTER-compliant alpha signals
+
+### Basic Alpha Generation (Programmatic)
 
 ```python
 from src.sentiment import SentimentEngine
