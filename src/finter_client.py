@@ -90,8 +90,8 @@ class FinterAPI:
             source_str = ",".join(batch)
 
             params = {
-                "from": "entity_id",
-                "to": "shortcode",       # No underscore per API mapping table
+                "from": "id",            # Per API example: from=id (not entity_id)
+                "to": "shortcode",       # Per API mapping table: shortcode (no underscore)
                 "source": source_str,
                 "universe": 0,
                 "date": date,
@@ -163,7 +163,7 @@ class FinterAPI:
 
             for method, from_key, to_key in candidates:
                 payload = {
-                    from_key: "entity_id",
+                    from_key: "id",
                     to_key: "shortcode",
                     "source": sample_entity_id,
                     "universe": 0,
