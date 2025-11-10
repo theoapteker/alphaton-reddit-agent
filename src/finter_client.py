@@ -71,10 +71,10 @@ class FinterAPI:
 
         logger.info("📡 Building ticker mapping from universe...")
 
-        # Use provided date or default to a recent date
+        # Use provided date or default to a recent historical date
         if date is None:
-            from datetime import datetime
-            date = datetime.now().strftime("%Y%m%d")
+            # Use a recent past date (API may not accept future dates)
+            date = "20240101"
 
         universe_df = self.get_universe(region="usa", type_stock="stock", vendor="spglobal")
         if max_securities and len(universe_df) > max_securities:
@@ -90,11 +90,11 @@ class FinterAPI:
             source_str = ",".join(batch)
 
             params = {
-                "from": "entity_id",     # Valid values: ccid, entity_id, entity_name, isin, short_code
-                "to": "short_code",      # Valid values: ccid, entity_id, entity_name, isin, short_code
+                "from": "id",            # Per example and mapping table
+                "to": "shortcode",       # Per mapping table (no underscore)
                 "source": source_str,
                 "universe": 0,
-                "date": date,
+                "date": date,            # Historical date
             }
 
             try:
@@ -148,10 +148,9 @@ class FinterAPI:
             Try a bunch of plausible param names for /id/convert and return the one that works.
             Returns: (method, from_key, to_key)
             """
-            # Use provided date or default to current date
+            # Use provided date or default to a historical date
             if date is None:
-                from datetime import datetime
-                date = datetime.now().strftime("%Y%m%d")
+                date = "20240101"
 
             candidates = [
                 ("get",  "from",      "to"),
@@ -164,8 +163,8 @@ class FinterAPI:
 
             for method, from_key, to_key in candidates:
                 payload = {
-                    from_key: "entity_id",
-                    to_key: "short_code",
+                    from_key: "id",
+                    to_key: "shortcode",
                     "source": sample_entity_id,
                     "universe": 0,
                     "date": date,
