@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 import logging
 import time
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 load_dotenv()
@@ -98,6 +98,7 @@ class FinterAPI:
             }
 
             try:
+                logger.debug(f"Calling /id/convert with params: {params}")
                 result = self.get("/id/convert", params=params)
 
                 if "code_mapped" in result:
