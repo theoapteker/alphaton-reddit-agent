@@ -52,9 +52,18 @@ class RedditSentimentAlpha:
 
         # Step 2: Filter sentiment data to requested date range
         self.sentiment_df['date'] = pd.to_datetime(self.sentiment_df['date'])
-        mask = (self.sentiment_df['date'] >= pd.to_datetime(str(start))) & \
-               (self.sentiment_df['date'] <= pd.to_datetime(str(end)))
+
+        # Convert YYYYMMDD integers to proper datetime objects with explicit format
+        start_date = pd.to_datetime(str(start), format='%Y%m%d')
+        end_date = pd.to_datetime(str(end), format='%Y%m%d')
+
+        mask = (self.sentiment_df['date'] >= start_date) & \
+               (self.sentiment_df['date'] <= end_date)
         filtered_sentiment = self.sentiment_df[mask].copy()
+
+        logger.info(f"   Sentiment date range: {self.sentiment_df['date'].min()} to {self.sentiment_df['date'].max()}")
+        logger.info(f"   Requested range: {start_date} to {end_date}")
+        logger.info(f"   Filtered records: {len(filtered_sentiment)}")
 
         if filtered_sentiment.empty:
             logger.warning("⚠️  No sentiment data in date range!")
