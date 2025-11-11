@@ -257,6 +257,21 @@ The project includes comprehensive test suites:
 3. Push to the branch: `git push origin feature/your-feature`
 4. Submit a pull request
 
+## n8n Integration
+
+This project can be connected to your professor's online n8n instance:
+
+- **[QUICK_START.md](QUICK_START.md)** - Fast setup guide (start here!)
+- **[N8N_CONNECTION_GUIDE.md](N8N_CONNECTION_GUIDE.md)** - Complete documentation
+- **Start Server:** `./start_server.sh`
+- **Test Endpoints:** `python test_n8n_endpoints.py`
+
+The MCP server exposes 4 tools for n8n:
+1. Scrape Reddit for stock mentions
+2. Analyze sentiment and map to gvkeyiid
+3. Generate FINTER-compliant alpha signals
+4. Submit to FINTER production
+
 ## Additional Resources
 
 - [MCP Servers Documentation](MCP_SERVERS.md) - Complete guide to all FINTER MCP servers

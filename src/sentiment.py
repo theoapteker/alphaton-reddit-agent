@@ -4,24 +4,72 @@ sys.path.append('src')
 from textblob import TextBlob
 import pandas as pd
 import numpy as np
-from finter_client import finter
 import logging
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 class SentimentEngine:
+    # Hardcoded ticker to gvkeyiid mapping
+    TICKER_MAPPING = {
+        'HON': '000130001',
+        'AMD': '000116101',
+        'AMGN': '000160201',
+        'AAPL': '000169001',
+        'BRK.B': '000217602',
+        'JPM': '000296801',
+        'CVX': '000299101',
+        'CAT': '000281701',
+        'KO': '000314401',
+        'DIS': '000398001',
+        'XOM': '000450301',
+        'GE': '000504701',
+        'HD': '000568001',
+        'JNJ': '000626601',
+        'INTC': '000600801',
+        'IBM': '000606601',
+        'LRCX': '000656501',
+        'LLY': '000673001',
+        'BAC': '000764701',
+        'MCD': '000715401',
+        'MRK': '000725701',
+        'WFC': '000800701',
+        'NKE': '000790601',
+        'PEP': '000847901',
+        'T': '000989901',
+        'ABBV': '001610101',
+        'PG': '000876201',
+        'TXN': '001049901',
+        'TMO': '001053001',
+        'UNH': '001090301',
+        'MSFT': '001214101',
+        'ORCL': '001214201',
+        'LIN': '002512401',
+        'QCOM': '002480001',
+        'BABA': '002053090',
+        'ANET': '002074801',
+        'UBER': '003507701',
+        'WMT': '001125901',
+        'COST': '002902801',
+        'ASML': '006121490',
+        'AMZN': '006476801',
+        'NFLX': '014757901',
+        'NVDA': '011776801',
+        'V': '017953401',
+        'MA': '016022501',
+        'GOOGL': '016032901',
+        'META': '017061701',
+        'CRM': '015785501',
+        'TSLA': '018499601',
+        'AVGO': '018071101'
+    }
+
     def __init__(self):
-        """Initialize and load FINTER universe mapping"""
-        logger.info("📡 Loading universe mapping...")
+        """Initialize with hardcoded ticker mapping"""
+        logger.info("📡 Loading hardcoded ticker mapping...")
 
-        self.universe_df = finter.get_universe()
-
-        # Create mapping: ticker -> gvkeyiid
-        self.ticker_to_gvkeyiid = dict(zip(
-            self.universe_df['tic'].astype(str),
-            self.universe_df['gvkeyiid'].astype(str)
-        ))
+        # Use the hardcoded mapping
+        self.ticker_to_gvkeyiid = self.TICKER_MAPPING.copy()
 
         logger.info(f"✅ Loaded {len(self.ticker_to_gvkeyiid)} ticker mappings")
 
