@@ -226,7 +226,7 @@ def generate_alpha_endpoint(request: AlphaRequest):
             "status": "success",
             "validation_passed": validation["passed"],
             "validation_details": validation,
-            "position_shape": position.shape,
+            "position_shape": list(position.shape),  # Convert tuple to list for JSON
             "position_preview": position.head().to_dict(),
             "position_json": position_json
         }
@@ -236,6 +236,8 @@ def generate_alpha_endpoint(request: AlphaRequest):
 
     except Exception as e:
         logger.error(f"❌ Alpha generation failed: {e}")
+        import traceback
+        traceback.print_exc()  # Print full traceback for debugging
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/tools/submit_to_finter", tags=["MCP Tools"])

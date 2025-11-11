@@ -69,7 +69,7 @@ class RedditSentimentAlpha:
         )
 
         # Step 4: Reindex to trading days and forward-fill missing dates
-        aligned = pivot.reindex(trading_days).fillna(method='ffill', limit=5).fillna(0)
+        aligned = pivot.reindex(trading_days).ffill(limit=5).fillna(0)
 
         # Step 5: Generate position weights (long positive, short negative sentiment)
         # Normalize each row to sum to 1.0 (then scale to target AUM)
