@@ -227,11 +227,15 @@ def main():
 
             finter = FinterAPI()
 
-            # Submit model
+            # Convert positions DataFrame to dict format for FINTER
+            position_dict = positions_df.to_dict(orient='split')
+
+            # Submit model with positions
             result = finter.submit_model(
                 model_name=args.model_name,
                 universe=args.universe,
-                docker_image="public.ecr.aws/d2s6t0y4/reddit-agent:v1"
+                docker_image="public.ecr.aws/d2s6t0y4/reddit-agent:v1",
+                position=position_dict
             )
 
             print(f"✅ Successfully submitted to FINTER!")

@@ -283,17 +283,27 @@ class FinterAPI:
         logger.info("✅ Simulation complete")
         return result
     
-    def submit_model(self, model_name: str, universe: str, docker_image: str) -> dict:
+    def submit_model(self, model_name: str, universe: str, docker_image: str, position: dict = None, alpha_code: str = None) -> dict:
         """Submit to production"""
         logger.info(f"📡 Submitting {model_name}")
-        
-        result = self.post("/submission", {
+
+        payload = {
             "model_name": model_name,
             "universe": universe,
             "docker_image": docker_image,
             "schedule": "0 16 * * *"
-        })
-        
+        }
+
+        # Add position data if provided
+        if position is not None:
+            payload["position"] = position
+
+        # Add alpha code if provided
+        if alpha_code is not None:
+            payload["alpha_code"] = alpha_code
+
+        result = self.post("/submission", payload)
+
         logger.info(f"✅ Submitted: {result.get('model_id')}")
         return result
 
