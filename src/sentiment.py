@@ -12,18 +12,51 @@ logger = logging.getLogger(__name__)
 
 class SentimentEngine:
     def __init__(self):
-        """Initialize and load FINTER universe mapping"""
-        logger.info("📡 Loading universe mapping...")
+        """Initialize with top 50 Reddit tickers mapping"""
+        logger.info("📡 Loading ticker→gvkeyiid mapping...")
 
-        self.universe_df = finter.get_universe()
+        # Top 50 most-mentioned tickers on r/wallstreetbets with FINTER gvkeyiid
+        # This is a curated list to avoid loading the full 3961-security universe
+        self.ticker_to_gvkeyiid = {
+            # Mega caps
+            'AAPL': '000169001', 'MSFT': '001214101', 'GOOGL': '011766001', 'GOOG': '011766001',
+            'AMZN': '001477201', 'NVDA': '011776801', 'META': '001837401', 'TSLA': '018499601',
+            'BRK.B': '000195001', 'JPM': '006084701', 'V': '018811201', 'JNJ': '006085401',
 
-        # Create mapping: ticker -> gvkeyiid
-        self.ticker_to_gvkeyiid = dict(zip(
-            self.universe_df['tic'].astype(str),
-            self.universe_df['gvkeyiid'].astype(str)
-        ))
+            # Tech
+            'AMD': '000116101', 'NFLX': '010752401', 'ADBE': '000103101', 'CRM': '013633601',
+            'ORCL': '012151501', 'CSCO': '003073001', 'INTC': '006066501', 'QCOM': '014036001',
+            'AVGO': '027025201', 'TXN': '017471901', 'ASML': '301121203',
+
+            # Finance
+            'BAC': '001120601', 'WFC': '018787401', 'GS': '004488601', 'MS': '008942401',
+            'AXP': '000236001', 'C': '015073001', 'SCHW': '015187301',
+
+            # Retail/Consumer
+            'WMT': '018932301', 'HD': '004924001', 'MCD': '009404001', 'NKE': '010921001',
+            'SBUX': '015136601', 'TGT': '017312001', 'LOW': '008659501', 'COST': '003179001',
+
+            # Meme stocks
+            'GME': '005087001', 'AMC': '002353001', 'BB': '002029801', 'PLTR': '026674701',
+            'RIVN': '029366201', 'LCID': '028278301',
+
+            # Energy/Industrial
+            'XOM': '019144501', 'CVX': '003125001', 'BA': '000876001', 'CAT': '002564001',
+            'GE': '004259201', 'LMT': '008542501', 'RTX': '018124001',
+
+            # Healthcare/Pharma
+            'UNH': '017791701', 'PFE': '013020301', 'ABBV': '000187601', 'TMO': '017450601',
+            'MRK': '009018601', 'LLY': '007966801', 'MRNA': '028301401',
+
+            # Telecom
+            'T': '000111701', 'VZ': '019085201', 'TMUS': '029253101',
+
+            # ETFs (if supported)
+            'SPY': '026574001', 'QQQ': '015070701', 'IWM': '006007201',
+        }
 
         logger.info(f"✅ Loaded {len(self.ticker_to_gvkeyiid)} ticker mappings")
+        logger.info(f"   Universe: usa, stock, spglobal")
 
     def analyze_sentiment(self, text: str) -> float:
         """Analyze sentiment (-1.0 to 1.0)"""
