@@ -247,17 +247,19 @@ class FinterAPI:
     def get_trading_days(self, start: int, end: int) -> pd.DatetimeIndex:
         """Get trading days in range (uses /calendar endpoint)"""
         logger.info(f"📡 Trading days {start}-{end}")
-        
+
         params = {"start_date": str(start), "end_date": str(end)}
         result = self.get("/calendar", params=params)
-        
+
         if "dates" in result:
-            dates = [pd.to_datetime(d) for d in result["dates"]]
+            # Convert YYYYMMDD integers/strings to datetime with proper format
+            dates = [pd.to_datetime(str(d), format='%Y%m%d') for d in result["dates"]]
         elif "trading_days" in result:
-            dates = [pd.to_datetime(d) for d in result["trading_days"]]
+            # Convert YYYYMMDD integers/strings to datetime with proper format
+            dates = [pd.to_datetime(str(d), format='%Y%m%d') for d in result["trading_days"]]
         else:
             raise ValueError("Unknown /calendar response format")
-        
+
         return pd.DatetimeIndex(dates)
     
     # =========================================================================
