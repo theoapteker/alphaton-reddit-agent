@@ -1,0 +1,492 @@
+{
+  "name": "Reddit Sentiment → FINTER Live Trading",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "30 15 * * *"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Schedule: Daily 3:30 PM UTC",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [250, 300],
+      "webhookId": "",
+      "notes": "Runs 30 minutes before FINTER execution at 4 PM UTC"
+    },
+    {
+      "parameters": {
+        "command": "cd /home/user/alphaton-reddit-agent && source venv/bin/activate && python submit_to_finter.py --dry-run --days 7 --model-name reddit_sentiment_v1",
+        "options": {}
+      },
+      "id": "run-python-script",
+      "name": "Run Python: Generate Positions",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [450, 300],
+      "notes": "Executes Reddit scraping, sentiment analysis, and alpha generation"
+    },
+    {
+      "parameters": {
+        "functionCode": "// Parse the Python script output\nconst output = $input.item.json.stdout || '';\n\n// Extract position file path\nconst positionFileMatch = output.match(/positions_(.*?).json/);\nconst positionFile = positionFileMatch ? positionFileMatch[0] : null;\n\n// Extract detected tickers\nconst tickerMatches = output.match(/Top tickers:[\\s\\S]*?Name: count, dtype: int64/);\nlet tickers = [];\nif (tickerMatches) {\n  const tickerLines = tickerMatches[0].split('\\n');\n  tickers = tickerLines\n    .filter(line => line.match(/^\\w+\\s+\\d+$/))\n    .map(line => line.split(/\\s+/)[0]);\n}\n\n// Extract metrics\nconst maxPositionMatch = output.match(/Max position size: \\$([\\d,]+)/);\nconst avgExposureMatch = output.match(/Avg gross exposure: \\$([\\d,]+)/);\n\nconst maxPosition = maxPositionMatch ? maxPositionMatch[1] : '0';\nconst avgExposure = avgExposureMatch ? avgExposureMatch[1] : '0';\n\n// Read position file if exists\nlet positionData = null;\nif (positionFile) {\n  const fs = require('fs');\n  const path = `/home/user/alphaton-reddit-agent/${positionFile}`;\n  try {\n    positionData = JSON.parse(fs.readFileSync(path, 'utf8'));\n  } catch (err) {\n    console.error('Failed to read position file:', err);\n  }\n}\n\nreturn {\n  json: {\n    success: output.includes('SUBMISSION COMPLETE'),\n    tickers: tickers,\n    maxPosition: maxPosition,\n    avgExposure: avgExposure,\n    positionFile: positionFile,\n    positionData: positionData,\n    rawOutput: output\n  }\n};"
+      },
+      "id": "parse-results",
+      "name": "Parse Python Results",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [650, 300],
+      "notes": "Extract tickers, positions, and metrics from Python output"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://stock-ai-brief.mcp.qore.so/mcp/",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.FINTER_JWT_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "tickers",
+              "value": "={{ $json.tickers }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-ai-analysis",
+      "name": "MCP: Get AI Stock Analysis",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [850, 200],
+      "notes": "Get AI-powered analysis for detected stocks"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://mavo2.mcp.qore.so/mcp/",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.FINTER_JWT_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "tickers",
+              "value": "={{ $json.tickers }}"
+            },
+            {
+              "name": "sources",
+              "value": "[\"news\", \"youtube\", \"telegram\"]"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-market-voice",
+      "name": "MCP: Get Market Voice Sentiment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [850, 400],
+      "notes": "Get sentiment from news, YouTube, and Telegram"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://market-data.mcp.qore.so/mcp/",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.FINTER_JWT_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "tickers",
+              "value": "={{ $json.tickers }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-market-data",
+      "name": "MCP: Get Latest Market Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [850, 600],
+      "notes": "Get current stock prices and order book data"
+    },
+    {
+      "parameters": {
+        "functionCode": "// Merge data from multiple sources\nconst pythonData = $('Parse Python Results').first().json;\nconst aiAnalysis = $('MCP: Get AI Stock Analysis').first().json;\nconst marketVoice = $('MCP: Get Market Voice Sentiment').first().json;\nconst marketData = $('MCP: Get Latest Market Data').first().json;\n\nreturn {\n  json: {\n    tickers: pythonData.tickers,\n    positionData: pythonData.positionData,\n    positionFile: pythonData.positionFile,\n    maxPosition: pythonData.maxPosition,\n    avgExposure: pythonData.avgExposure,\n    enrichment: {\n      aiAnalysis: aiAnalysis,\n      marketVoice: marketVoice,\n      marketData: marketData\n    },\n    timestamp: new Date().toISOString()\n  }\n};"
+      },
+      "id": "merge-data",
+      "name": "Merge All Data Sources",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1050, 300],
+      "notes": "Combine Reddit sentiment with MCP server data"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://ark-simulator.mcp.qore.so/mcp/",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.FINTER_JWT_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "position",
+              "value": "={{ $json.positionData }}"
+            },
+            {
+              "name": "start_date",
+              "value": "20250801"
+            },
+            {
+              "name": "end_date",
+              "value": "20251111"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "backtest-alpha",
+      "name": "MCP: Backtest with Alpha Simulator",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1250, 300],
+      "notes": "Run historical backtest before going live"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "sharpe-check",
+              "leftValue": "={{ $json.sharpe_ratio }}",
+              "rightValue": 1.5,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            },
+            {
+              "id": "drawdown-check",
+              "leftValue": "={{ $json.max_drawdown }}",
+              "rightValue": 0.15,
+              "operator": {
+                "type": "number",
+                "operation": "lt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-backtest-results",
+      "name": "Check: Backtest Passes Criteria?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1450, 300],
+      "notes": "Only proceed if Sharpe > 1.5 and Max Drawdown < 15%"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.finter.quantit.io/submission",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.FINTER_JWT_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model_name",
+              "value": "reddit_sentiment_v1"
+            },
+            {
+              "name": "universe",
+              "value": "us_stock"
+            },
+            {
+              "name": "docker_image",
+              "value": "public.ecr.aws/d2s6t0y4/reddit-agent:v1"
+            },
+            {
+              "name": "schedule",
+              "value": "0 16 * * *"
+            },
+            {
+              "name": "position",
+              "value": "={{ $('Merge All Data Sources').first().json.positionData }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "submit-to-finter",
+      "name": "Submit to FINTER Production",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1650, 200],
+      "notes": "Submit alpha for live trading on FINTER"
+    },
+    {
+      "parameters": {
+        "fromEmail": "noreply@yourdomain.com",
+        "toEmail": "your@email.com",
+        "subject": "✅ FINTER Submission Successful: reddit_sentiment_v1",
+        "emailType": "html",
+        "message": "=<h2>🎉 Reddit Sentiment Alpha Submitted to FINTER</h2>\n\n<h3>📊 Model Details</h3>\n<ul>\n  <li><strong>Model ID:</strong> {{ $json.model_id }}</li>\n  <li><strong>Model Name:</strong> reddit_sentiment_v1</li>\n  <li><strong>Universe:</strong> us_stock</li>\n  <li><strong>Schedule:</strong> Daily at 4 PM UTC</li>\n</ul>\n\n<h3>📈 Stocks Traded</h3>\n<p>{{ $('Parse Python Results').first().json.tickers.join(', ') }}</p>\n\n<h3>💰 Position Summary</h3>\n<ul>\n  <li><strong>Max Position:</strong> ${{ $('Parse Python Results').first().json.maxPosition }}</li>\n  <li><strong>Avg Exposure:</strong> ${{ $('Parse Python Results').first().json.avgExposure }}</li>\n</ul>\n\n<h3>🎯 Backtest Results</h3>\n<ul>\n  <li><strong>Sharpe Ratio:</strong> {{ $('MCP: Backtest with Alpha Simulator').first().json.sharpe_ratio }}</li>\n  <li><strong>Max Drawdown:</strong> {{ $('MCP: Backtest with Alpha Simulator').first().json.max_drawdown }}%</li>\n  <li><strong>Total Return:</strong> {{ $('MCP: Backtest with Alpha Simulator').first().json.total_return }}%</li>\n</ul>\n\n<h3>🔗 Links</h3>\n<ul>\n  <li><a href=\"{{ $json.validation_url }}\">View Validation Results</a></li>\n  <li><a href=\"https://finter.quantit.io/models/{{ $json.model_id }}\">View Model Dashboard</a></li>\n</ul>\n\n<p><em>Submitted at: {{ new Date().toISOString() }}</em></p>",
+        "options": {}
+      },
+      "id": "send-success-email",
+      "name": "Send Success Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1850, 200],
+      "credentials": {
+        "smtp": {
+          "id": "1",
+          "name": "Gmail SMTP"
+        }
+      },
+      "notes": "Notify about successful submission"
+    },
+    {
+      "parameters": {
+        "fromEmail": "noreply@yourdomain.com",
+        "toEmail": "your@email.com",
+        "subject": "⚠️ FINTER Submission Blocked: Backtest Failed",
+        "emailType": "html",
+        "message": "=<h2>⚠️ Reddit Sentiment Alpha NOT Submitted</h2>\n\n<p>The alpha did not pass backtest validation criteria and was not submitted to FINTER.</p>\n\n<h3>🎯 Backtest Results</h3>\n<ul>\n  <li><strong>Sharpe Ratio:</strong> {{ $json.sharpe_ratio }} (required: > 1.5)</li>\n  <li><strong>Max Drawdown:</strong> {{ $json.max_drawdown }}% (required: < 15%)</li>\n  <li><strong>Total Return:</strong> {{ $json.total_return }}%</li>\n</ul>\n\n<h3>📊 Detected Stocks</h3>\n<p>{{ $('Parse Python Results').first().json.tickers.join(', ') }}</p>\n\n<h3>💡 Recommendation</h3>\n<p>Review the strategy parameters or wait for better market conditions.</p>\n\n<p><em>Checked at: {{ new Date().toISOString() }}</em></p>",
+        "options": {}
+      },
+      "id": "send-failure-email",
+      "name": "Send Backtest Failure Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1650, 400],
+      "credentials": {
+        "smtp": {
+          "id": "1",
+          "name": "Gmail SMTP"
+        }
+      },
+      "notes": "Notify that backtest failed and submission was blocked"
+    }
+  ],
+  "connections": {
+    "Schedule: Daily 3:30 PM UTC": {
+      "main": [
+        [
+          {
+            "node": "Run Python: Generate Positions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Python: Generate Positions": {
+      "main": [
+        [
+          {
+            "node": "Parse Python Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Python Results": {
+      "main": [
+        [
+          {
+            "node": "MCP: Get AI Stock Analysis",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "MCP: Get Market Voice Sentiment",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "MCP: Get Latest Market Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MCP: Get AI Stock Analysis": {
+      "main": [
+        [
+          {
+            "node": "Merge All Data Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MCP: Get Market Voice Sentiment": {
+      "main": [
+        [
+          {
+            "node": "Merge All Data Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MCP: Get Latest Market Data": {
+      "main": [
+        [
+          {
+            "node": "Merge All Data Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge All Data Sources": {
+      "main": [
+        [
+          {
+            "node": "MCP: Backtest with Alpha Simulator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MCP: Backtest with Alpha Simulator": {
+      "main": [
+        [
+          {
+            "node": "Check: Backtest Passes Criteria?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check: Backtest Passes Criteria?": {
+      "main": [
+        [
+          {
+            "node": "Submit to FINTER Production",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Backtest Failure Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Submit to FINTER Production": {
+      "main": [
+        [
+          {
+            "node": "Send Success Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2025-11-11T10:30:00.000Z",
+  "versionId": "1"
+}
