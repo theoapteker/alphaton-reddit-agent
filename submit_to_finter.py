@@ -171,17 +171,21 @@ def main():
 
         validation_result = alpha.validate(start=start_date_finter, end=end_date_finter)
 
-        if not validation_result['is_valid']:
+        if not validation_result['passed']:
             print("❌ ERROR: Validation failed!")
-            print(f"   Max difference: ${validation_result['max_difference']:.2f}")
+            print(f"   Total difference: ${validation_result['total_diff']:.2f}")
+            print(f"   Max position difference: ${validation_result['max_position_diff']:.2f}")
             print(f"   Threshold: ${validation_result['threshold']:.2f}")
+            print(f"   Overlap days: {validation_result['overlap_days']}")
             print()
             print("This alpha does not meet FINTER's start-end dependency requirements.")
             return 1
 
         print(f"✅ Validation passed!")
-        print(f"   Max difference: ${validation_result['max_difference']:.2f}")
+        print(f"   Total difference: ${validation_result['total_diff']:.2f}")
+        print(f"   Max position difference: ${validation_result['max_position_diff']:.2f}")
         print(f"   Threshold: ${validation_result['threshold']:.2f}")
+        print(f"   Overlap days: {validation_result['overlap_days']}")
         print()
 
         # =====================================================================
