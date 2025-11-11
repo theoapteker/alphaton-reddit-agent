@@ -118,7 +118,8 @@ def main():
         print("Next steps:")
         print("  1. Run backtests using test_alpha_comprehensive.py")
         print("  2. Optimize parameters using FINTER MCP servers")
-        print("  3. Deploy alpha to FINTER platform")
+        print("  3. Submit to FINTER for live trading:")
+        print("     python submit_to_finter.py --model-name reddit_sentiment_v1")
         print()
 
         return 0

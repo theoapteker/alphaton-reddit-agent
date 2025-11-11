@@ -178,6 +178,47 @@ alpha = RedditSentimentAlpha(sentiment_df, leverage=1.0)
 positions = alpha.get(start=20240101, end=20241231)
 ```
 
+### Submitting to FINTER for Live Trading
+
+After testing your pipeline, submit your alpha to FINTER for live trading:
+
+```bash
+# Make sure virtual environment is activated!
+source venv/bin/activate
+
+# Submit to FINTER (live trading)
+python submit_to_finter.py --model-name reddit_sentiment_v1
+
+# Or run in dry-run mode first to test without submitting
+python submit_to_finter.py --model-name reddit_sentiment_v1 --dry-run
+
+# Customize parameters
+python submit_to_finter.py \
+  --model-name my_custom_model \
+  --days 60 \
+  --leverage 1.5 \
+  --universe us_stock
+```
+
+**Options:**
+- `--model-name`: Name for your model (default: `reddit_sentiment_v1`)
+- `--days`: Historical data window in days (default: 30)
+- `--leverage`: Position size multiplier (default: 1.0)
+- `--universe`: FINTER universe to trade (default: `us_stock`)
+- `--dry-run`: Test pipeline without submitting to FINTER
+
+**What happens when you submit:**
+1. Scrapes Reddit for stock mentions (last N days)
+2. Analyzes sentiment using TextBlob
+3. Maps tickers to FINTER gvkeyiid format
+4. Generates FINTER-compliant alpha positions
+5. Validates positions against FINTER requirements
+6. Saves positions to JSON file
+7. Submits to FINTER production API
+8. Returns model ID and validation URL
+
+**Your alpha will run daily at 4 PM UTC** (`0 16 * * *` schedule).
+
 ### Running Tests
 
 ```bash
