@@ -156,11 +156,11 @@ class RedditSentimentAlpha:
                 logger.error(f"   Worst tickers: {worst_tickers.to_dict()}")
 
         return {
-            "passed": passed,
+            "passed": bool(passed),  # Convert numpy.bool_ to Python bool
             "total_diff": float(total_diff),
             "threshold": threshold,
             "overlap_days": len(pos1_overlap),
-            "max_position_diff": float(diff.max().max()) if not diff.empty else 0,
+            "max_position_diff": float(diff.max().max()) if not diff.empty else 0.0,
         }
 
 # Test the alpha
