@@ -1,0 +1,1139 @@
+{
+  "name": "Reddit Alpha Agent - Full Pipeline",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://datetime.mcp.qore.so/mcp/",
+        "method": "POST",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "jsonrpc",
+              "value": "2.0"
+            },
+            {
+              "name": "method",
+              "value": "tools/call"
+            },
+            {
+              "name": "params",
+              "value": "={\"name\":\"current_datetime\",\"arguments\":{}}"
+            },
+            {
+              "name": "id",
+              "value": "1"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "datetime-node",
+      "name": "Get Current DateTime (KST)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://oauth.reddit.com/r/wallstreetbets/new",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "method": "GET",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "limit",
+              "value": "100"
+            },
+            {
+              "name": "t",
+              "value": "week"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "AlphatonAgent/1.0"
+            }
+          ]
+        }
+      },
+      "id": "reddit-scraper",
+      "name": "Scrape Reddit Posts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [680, 300],
+      "credentials": {
+        "oAuth2Api": {
+          "id": "reddit-oauth",
+          "name": "Reddit OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract ticker mentions from Reddit posts\nconst posts = $input.all();\nconst tickerPattern = /\\$([A-Z]{2,5})\\b/g;\nconst mentions = [];\n\nfor (const post of posts) {\n  const data = post.json.data;\n  if (!data || !data.children) continue;\n  \n  for (const child of data.children) {\n    const postData = child.data;\n    const text = `${postData.title} ${postData.selftext || ''}`;\n    const created = new Date(postData.created_utc * 1000);\n    \n    // Find all ticker mentions\n    const tickers = [...text.matchAll(tickerPattern)];\n    const uniqueTickers = [...new Set(tickers.map(m => m[1]))];\n    \n    for (const ticker of uniqueTickers) {\n      mentions.push({\n        ticker: ticker,\n        date: created.toISOString().split('T')[0],\n        score: postData.score,\n        num_comments: postData.num_comments,\n        text: text.substring(0, 500),\n        post_id: postData.id,\n        created_utc: created.toISOString()\n      });\n    }\n  }\n}\n\nreturn mentions.map(m => ({ json: m }));"
+      },
+      "id": "extract-tickers",
+      "name": "Extract Ticker Mentions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Analyze sentiment using TextBlob-style polarity estimation\nconst items = $input.all();\n\n// Simple sentiment analysis (positive/negative words)\nconst positiveWords = ['good', 'great', 'excellent', 'amazing', 'bullish', 'buy', 'moon', 'rocket', 'gains', 'profit', 'up', 'high', 'strong', 'love', 'best'];\nconst negativeWords = ['bad', 'terrible', 'awful', 'bearish', 'sell', 'crash', 'loss', 'down', 'low', 'weak', 'hate', 'worst', 'dump', 'fail'];\n\nfunction analyzeSentiment(text) {\n  if (!text) return 0;\n  \n  const lowerText = text.toLowerCase();\n  let positiveCount = 0;\n  let negativeCount = 0;\n  \n  for (const word of positiveWords) {\n    const regex = new RegExp(`\\\\b${word}\\\\b`, 'g');\n    const matches = lowerText.match(regex);\n    if (matches) positiveCount += matches.length;\n  }\n  \n  for (const word of negativeWords) {\n    const regex = new RegExp(`\\\\b${word}\\\\b`, 'g');\n    const matches = lowerText.match(regex);\n    if (matches) negativeCount += matches.length;\n  }\n  \n  const total = positiveCount + negativeCount;\n  if (total === 0) return 0;\n  \n  return (positiveCount - negativeCount) / total;\n}\n\nreturn items.map(item => {\n  const data = item.json;\n  return {\n    json: {\n      ...data,\n      sentiment: analyzeSentiment(data.text)\n    }\n  };\n});"
+      },
+      "id": "sentiment-analysis",
+      "name": "Analyze Sentiment",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://ticker.mcp.qore.so/mcp/",
+        "method": "POST",
+        "sendBody": true,
+        "contentType": "application/json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "jsonrpc",
+              "value": "2.0"
+            },
+            {
+              "name": "method",
+              "value": "tools/call"
+            },
+            {
+              "name": "params",
+              "value": "={\"name\":\"search_stock\",\"arguments\":{\"keyword\":\"{{ $json.ticker }}\"}}"
+            },
+            {
+              "name": "id",
+              "value": "={{ $runIndex }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $credentials.finterJWT }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ticker-lookup",
+      "name": "Ticker Lookup (MCP)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1340, 300],
+      "credentials": {
+        "finterJWT": {
+          "id": "finter-jwt-token",
+          "name": "FINTER JWT Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://market-voice.mcp.qore.so/mcp/",
+        "method": "POST",
+        "sendBody": true,
+        "contentType": "application/json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "jsonrpc",
+              "value": "2.0"
+            },
+            {
+              "name": "method",
+              "value": "tools/call"
+            },
+            {
+              "name": "params",
+              "value": "={\"name\":\"search_market_voice_topics_by_text\",\"arguments\":{\"text\":\"{{ $json.ticker }}\",\"market\":\"US\"}}"
+            },
+            {
+              "name": "id",
+              "value": "={{ $runIndex }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $credentials.finterJWT }}"
+            }
+          ]
+        }
+      },
+      "id": "market-voice",
+      "name": "Market Voice Analysis",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1340, 500],
+      "credentials": {
+        "finterJWT": {
+          "id": "finter-jwt-token",
+          "name": "FINTER JWT Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://stock-ai-brief.mcp.qore.so/mcp/",
+        "method": "POST",
+        "sendBody": true,
+        "contentType": "application/json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "jsonrpc",
+              "value": "2.0"
+            },
+            {
+              "name": "method",
+              "value": "tools/call"
+            },
+            {
+              "name": "params",
+              "value": "={\"name\":\"get_stock_ai_brief\",\"arguments\":{\"ticker\":\"{{ $json.ticker }}\"}}"
+            },
+            {
+              "name": "id",
+              "value": "={{ $runIndex }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $credentials.finterJWT }}"
+            }
+          ]
+        }
+      },
+      "id": "stock-ai-brief",
+      "name": "Stock AI Brief",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1340, 700],
+      "credentials": {
+        "finterJWT": {
+          "id": "finter-jwt-token",
+          "name": "FINTER JWT Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://moneytoring-brief.mcp.qore.so/mcp/",
+        "method": "POST",
+        "sendBody": true,
+        "contentType": "application/json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "jsonrpc",
+              "value": "2.0"
+            },
+            {
+              "name": "method",
+              "value": "tools/call"
+            },
+            {
+              "name": "params",
+              "value": "={\"name\":\"get_fundamental_current\",\"arguments\":{\"ticker\":\"{{ $json.ticker }}\"}}"
+            },
+            {
+              "name": "id",
+              "value": "={{ $runIndex }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $credentials.finterJWT }}"
+            }
+          ]
+        }
+      },
+      "id": "fundamentals",
+      "name": "Get Fundamentals",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1560, 300],
+      "credentials": {
+        "finterJWT": {
+          "id": "finter-jwt-token",
+          "name": "FINTER JWT Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://market-data.mcp.qore.so/mcp/",
+        "method": "POST",
+        "sendBody": true,
+        "contentType": "application/json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "jsonrpc",
+              "value": "2.0"
+            },
+            {
+              "name": "method",
+              "value": "tools/call"
+            },
+            {
+              "name": "params",
+              "value": "={\"name\":\"get_market_data_current\",\"arguments\":{\"ticker\":\"{{ $json.ticker }}\"}}"
+            },
+            {
+              "name": "id",
+              "value": "={{ $runIndex }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $credentials.finterJWT }}"
+            }
+          ]
+        }
+      },
+      "id": "market-data",
+      "name": "Get Market Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1560, 500],
+      "credentials": {
+        "finterJWT": {
+          "id": "finter-jwt-token",
+          "name": "FINTER JWT Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://theme.mcp.qore.so/mcp/",
+        "method": "POST",
+        "sendBody": true,
+        "contentType": "application/json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "jsonrpc",
+              "value": "2.0"
+            },
+            {
+              "name": "method",
+              "value": "tools/call"
+            },
+            {
+              "name": "params",
+              "value": "={\"name\":\"get_popular_theme_list\",\"arguments\":{}}"
+            },
+            {
+              "name": "id",
+              "value": "1"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $credentials.finterJWT }}"
+            }
+          ]
+        }
+      },
+      "id": "themes",
+      "name": "Get Popular Themes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1560, 700],
+      "credentials": {
+        "finterJWT": {
+          "id": "finter-jwt-token",
+          "name": "FINTER JWT Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://screener.mcp.qore.so/mcp/",
+        "method": "POST",
+        "sendBody": true,
+        "contentType": "application/json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "jsonrpc",
+              "value": "2.0"
+            },
+            {
+              "name": "method",
+              "value": "tools/call"
+            },
+            {
+              "name": "params",
+              "value": "={\"name\":\"get_screener_filter_list\",\"arguments\":{}}"
+            },
+            {
+              "name": "id",
+              "value": "1"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $credentials.finterJWT }}"
+            }
+          ]
+        }
+      },
+      "id": "screener",
+      "name": "Stock Screener",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1780, 300],
+      "credentials": {
+        "finterJWT": {
+          "id": "finter-jwt-token",
+          "name": "FINTER JWT Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://edgar-13f.mcp.qore.so/mcp/",
+        "method": "POST",
+        "sendBody": true,
+        "contentType": "application/json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "jsonrpc",
+              "value": "2.0"
+            },
+            {
+              "name": "method",
+              "value": "tools/call"
+            },
+            {
+              "name": "params",
+              "value": "={\"name\":\"get_13f_portfolio\",\"arguments\":{\"cik\":\"0001067983\",\"filing_date\":\"2024-12-31\"}}"
+            },
+            {
+              "name": "id",
+              "value": "1"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $credentials.finterJWT }}"
+            }
+          ]
+        }
+      },
+      "id": "edgar-13f",
+      "name": "EDGAR 13F Analysis",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1780, 500],
+      "credentials": {
+        "finterJWT": {
+          "id": "finter-jwt-token",
+          "name": "FINTER JWT Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://economic-calendar.mcp.qore.so/mcp/",
+        "method": "POST",
+        "sendBody": true,
+        "contentType": "application/json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "jsonrpc",
+              "value": "2.0"
+            },
+            {
+              "name": "method",
+              "value": "tools/call"
+            },
+            {
+              "name": "params",
+              "value": "={\"name\":\"get_events_by_period\",\"arguments\":{\"start_date\":\"2025-01-01\",\"end_date\":\"2025-12-31\"}}"
+            },
+            {
+              "name": "id",
+              "value": "1"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $credentials.finterJWT }}"
+            }
+          ]
+        }
+      },
+      "id": "economic-calendar",
+      "name": "Economic Calendar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1780, 700],
+      "credentials": {
+        "finterJWT": {
+          "id": "finter-jwt-token",
+          "name": "FINTER JWT Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate all data for alpha generation\nconst allData = $input.all();\n\n// Group data by type\nconst aggregated = {\n  sentiment_mentions: [],\n  market_voice: [],\n  fundamentals: [],\n  market_data: [],\n  themes: [],\n  screener_data: [],\n  edgar_13f: [],\n  economic_events: []\n};\n\nfor (const item of allData) {\n  const data = item.json;\n  \n  // Classify data by source\n  if (data.sentiment !== undefined) {\n    aggregated.sentiment_mentions.push(data);\n  }\n  if (data.result && data.result.content) {\n    const content = data.result.content;\n    if (content.some(c => c.text && c.text.includes('market_voice'))) {\n      aggregated.market_voice.push(data);\n    } else if (content.some(c => c.text && c.text.includes('fundamental'))) {\n      aggregated.fundamentals.push(data);\n    }\n  }\n}\n\n// Calculate aggregated sentiment by ticker\nconst tickerSentiment = {};\nfor (const mention of aggregated.sentiment_mentions) {\n  if (!tickerSentiment[mention.ticker]) {\n    tickerSentiment[mention.ticker] = {\n      ticker: mention.ticker,\n      sentiment_sum: 0,\n      sentiment_count: 0,\n      total_score: 0,\n      mentions: []\n    };\n  }\n  \n  tickerSentiment[mention.ticker].sentiment_sum += mention.sentiment;\n  tickerSentiment[mention.ticker].sentiment_count += 1;\n  tickerSentiment[mention.ticker].total_score += mention.score || 0;\n  tickerSentiment[mention.ticker].mentions.push(mention);\n}\n\n// Calculate average sentiment\nconst results = [];\nfor (const ticker in tickerSentiment) {\n  const data = tickerSentiment[ticker];\n  results.push({\n    ticker: ticker,\n    avg_sentiment: data.sentiment_sum / data.sentiment_count,\n    mention_count: data.sentiment_count,\n    total_reddit_score: data.total_score,\n    signal_strength: (data.sentiment_sum / data.sentiment_count) * Math.log(data.sentiment_count + 1)\n  });\n}\n\n// Sort by signal strength\nresults.sort((a, b) => b.signal_strength - a.signal_strength);\n\nreturn [{ json: { aggregated_data: results, metadata: { timestamp: new Date().toISOString() } } }];"
+      },
+      "id": "aggregate-data",
+      "name": "Aggregate All Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2000, 500]
+    },
+    {
+      "parameters": {
+        "url": "https://finter.mcp.qore.so/mcp",
+        "method": "POST",
+        "sendBody": true,
+        "contentType": "application/json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "jsonrpc",
+              "value": "2.0"
+            },
+            {
+              "name": "method",
+              "value": "tools/call"
+            },
+            {
+              "name": "params",
+              "value": "={\"name\":\"generate_alpha\",\"arguments\":{\"user_request\":\"Generate a sentiment-based alpha strategy using Reddit data. The strategy should: 1) Use sentiment scores from social media, 2) Weight positions by mention frequency and sentiment strength, 3) Apply position sizing with max $100M per position, 4) Use 1-day lag to avoid look-ahead bias\",\"additional_context\":\"Reddit mentions with sentiment analysis: {{ JSON.stringify($json.aggregated_data) }}\"}}"
+            },
+            {
+              "name": "id",
+              "value": "1"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $credentials.finterJWT }}"
+            }
+          ]
+        }
+      },
+      "id": "generate-alpha",
+      "name": "Generate Alpha (FINTER MCP)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2220, 500],
+      "credentials": {
+        "finterJWT": {
+          "id": "finter-jwt-token",
+          "name": "FINTER JWT Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract alpha code from FINTER response\nconst response = $input.first().json;\n\nlet alphaCode = '';\nif (response.result && response.result.content) {\n  for (const content of response.result.content) {\n    if (content.text) {\n      alphaCode += content.text + '\\n';\n    }\n  }\n}\n\n// Parse out the actual Python alpha code\nconst codeMatch = alphaCode.match(/```python([\\s\\S]*?)```/);\nif (codeMatch) {\n  alphaCode = codeMatch[1].trim();\n}\n\nreturn [{\n  json: {\n    alpha_code: alphaCode,\n    timestamp: new Date().toISOString(),\n    model_name: 'reddit_sentiment_alpha_v1'\n  }\n}];"
+      },
+      "id": "extract-alpha-code",
+      "name": "Extract Alpha Code",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2440, 500]
+    },
+    {
+      "parameters": {
+        "url": "https://mcp-qflex.hilala.ai/mcp",
+        "method": "POST",
+        "sendBody": true,
+        "contentType": "application/json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "jsonrpc",
+              "value": "2.0"
+            },
+            {
+              "name": "method",
+              "value": "tools/call"
+            },
+            {
+              "name": "params",
+              "value": "={\"name\":\"backtest_model_parameters\",\"arguments\":{\"model_code\":\"{{ $json.alpha_code }}\",\"parameter_sets\":[{\"leverage\":0.5},{\"leverage\":1.0},{\"leverage\":1.5},{\"leverage\":2.0}],\"start_date\":\"20240101\",\"end_date\":\"20241231\"}}"
+            },
+            {
+              "name": "id",
+              "value": "1"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $credentials.finterJWT }}"
+            }
+          ]
+        }
+      },
+      "id": "optimize-parameters",
+      "name": "Optimize Parameters (QFlex)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2660, 500],
+      "credentials": {
+        "finterJWT": {
+          "id": "finter-jwt-token",
+          "name": "FINTER JWT Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://ark-simulator.mcp.qore.so/mcp/",
+        "method": "POST",
+        "sendBody": true,
+        "contentType": "application/json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "jsonrpc",
+              "value": "2.0"
+            },
+            {
+              "name": "method",
+              "value": "tools/call"
+            },
+            {
+              "name": "params",
+              "value": "={\"name\":\"run_simulator\",\"arguments\":{\"model_code\":\"{{ $('Extract Alpha Code').item.json.alpha_code }}\",\"start_date\":\"20240101\",\"end_date\":\"20241231\",\"initial_cash\":100000000}}"
+            },
+            {
+              "name": "id",
+              "value": "1"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $credentials.finterJWT }}"
+            }
+          ]
+        }
+      },
+      "id": "backtest-alpha",
+      "name": "Backtest Alpha (Simulator)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2880, 500],
+      "credentials": {
+        "finterJWT": {
+          "id": "finter-jwt-token",
+          "name": "FINTER JWT Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Analyze backtest results and decide whether to submit\nconst backtestResponse = $input.first().json;\nconst alphaCode = $('Extract Alpha Code').item.json.alpha_code;\nconst optimizationResults = $('Optimize Parameters (QFlex)').item.json;\n\n// Extract performance metrics\nlet performanceMetrics = {\n  sharpe_ratio: 0,\n  total_return: 0,\n  max_drawdown: 0,\n  pass_threshold: false\n};\n\nif (backtestResponse.result && backtestResponse.result.content) {\n  for (const content of backtestResponse.result.content) {\n    if (content.text) {\n      const text = content.text;\n      \n      // Extract metrics (simple parsing)\n      const sharpeMatch = text.match(/sharpe[\\s_]ratio[:\\s]+([-\\d.]+)/i);\n      const returnMatch = text.match(/return[:\\s]+([-\\d.]+)%?/i);\n      const drawdownMatch = text.match(/drawdown[:\\s]+([-\\d.]+)%?/i);\n      \n      if (sharpeMatch) performanceMetrics.sharpe_ratio = parseFloat(sharpeMatch[1]);\n      if (returnMatch) performanceMetrics.total_return = parseFloat(returnMatch[1]);\n      if (drawdownMatch) performanceMetrics.max_drawdown = parseFloat(drawdownMatch[1]);\n    }\n  }\n}\n\n// Decision criteria\nperformanceMetrics.pass_threshold = (\n  performanceMetrics.sharpe_ratio > 0.5 &&\n  performanceMetrics.total_return > 5 &&\n  performanceMetrics.max_drawdown < 30\n);\n\n// Find best parameters\nlet bestParams = { leverage: 1.0 };\nif (optimizationResults.result && optimizationResults.result.content) {\n  // Parse optimization results to find best parameters\n  bestParams = { leverage: 1.0 }; // Default fallback\n}\n\nreturn [{\n  json: {\n    alpha_code: alphaCode,\n    performance: performanceMetrics,\n    best_parameters: bestParams,\n    should_submit: performanceMetrics.pass_threshold,\n    model_name: 'reddit_sentiment_alpha_v1',\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "analyze-results",
+      "name": "Analyze Backtest Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3100, 500]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.should_submit }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "check-if-submit",
+      "name": "Check If Should Submit",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [3320, 500]
+    },
+    {
+      "parameters": {
+        "url": "https://finter.mcp.qore.so/mcp",
+        "method": "POST",
+        "sendBody": true,
+        "contentType": "application/json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "jsonrpc",
+              "value": "2.0"
+            },
+            {
+              "name": "method",
+              "value": "tools/call"
+            },
+            {
+              "name": "params",
+              "value": "={\"name\":\"model_submit\",\"arguments\":{\"model_name\":\"{{ $json.model_name }}\",\"model_code\":\"{{ $json.alpha_code }}\",\"universe\":\"us_stock\",\"schedule\":\"0 16 * * *\"}}"
+            },
+            {
+              "name": "id",
+              "value": "1"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $credentials.finterJWT }}"
+            }
+          ]
+        }
+      },
+      "id": "submit-to-finter",
+      "name": "Submit to FINTER",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [3540, 400],
+      "credentials": {
+        "finterJWT": {
+          "id": "finter-jwt-token",
+          "name": "FINTER JWT Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://mcp-scheduler.hilala.ai/mcp",
+        "method": "POST",
+        "sendBody": true,
+        "contentType": "application/json",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "jsonrpc",
+              "value": "2.0"
+            },
+            {
+              "name": "method",
+              "value": "tools/call"
+            },
+            {
+              "name": "params",
+              "value": "={\"name\":\"create_notification_schedule\",\"arguments\":{\"schedule_name\":\"reddit_alpha_daily_report\",\"cron_expression\":\"0 17 * * *\",\"email\":\"twa2017@nyu.edu\",\"message\":\"Reddit Sentiment Alpha Daily Report\"}}"
+            },
+            {
+              "name": "id",
+              "value": "1"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $credentials.finterJWT }}"
+            }
+          ]
+        }
+      },
+      "id": "schedule-reports",
+      "name": "Schedule Daily Reports",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [3540, 600],
+      "credentials": {
+        "finterJWT": {
+          "id": "finter-jwt-token",
+          "name": "FINTER JWT Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Final summary of the entire workflow\nconst submitResponse = $('Submit to FINTER').item.json;\nconst analysisResults = $('Analyze Backtest Results').item.json;\nconst scheduleResponse = $('Schedule Daily Reports').item.json;\n\nconst summary = {\n  workflow: 'Reddit Alpha Agent - Complete',\n  status: 'SUCCESS',\n  timestamp: new Date().toISOString(),\n  model_name: analysisResults.model_name,\n  performance: analysisResults.performance,\n  submitted_to_finter: true,\n  model_id: null,\n  scheduled: true,\n  next_steps: [\n    'Monitor performance in FINTER dashboard',\n    'Check daily email reports at 5 PM UTC',\n    'Review position sizing and risk metrics',\n    'Adjust parameters based on live performance'\n  ]\n};\n\n// Extract model ID from submission response\nif (submitResponse.result && submitResponse.result.content) {\n  for (const content of submitResponse.result.content) {\n    if (content.text) {\n      const modelIdMatch = content.text.match(/model[_\\s]id[:\\s]+([\\w-]+)/i);\n      if (modelIdMatch) {\n        summary.model_id = modelIdMatch[1];\n      }\n    }\n  }\n}\n\nreturn [{ json: summary }];"
+      },
+      "id": "final-summary",
+      "name": "Generate Final Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3760, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Performance below threshold - don't submit\nconst analysisResults = $input.first().json;\n\nconst summary = {\n  workflow: 'Reddit Alpha Agent - Complete',\n  status: 'NOT_SUBMITTED',\n  timestamp: new Date().toISOString(),\n  model_name: analysisResults.model_name,\n  performance: analysisResults.performance,\n  submitted_to_finter: false,\n  reason: 'Performance metrics below threshold',\n  recommendations: [\n    'Review sentiment analysis algorithm',\n    'Adjust position sizing parameters',\n    'Consider adding more data sources',\n    'Extend backtesting period',\n    'Try different leverages or universes'\n  ],\n  thresholds: {\n    sharpe_ratio: { required: 0.5, actual: analysisResults.performance.sharpe_ratio },\n    total_return: { required: 5, actual: analysisResults.performance.total_return },\n    max_drawdown: { required: 30, actual: analysisResults.performance.max_drawdown }\n  }\n};\n\nreturn [{ json: summary }];"
+      },
+      "id": "not-submitted-summary",
+      "name": "Generate Not Submitted Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3540, 700]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Current DateTime (KST)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Current DateTime (KST)": {
+      "main": [
+        [
+          {
+            "node": "Scrape Reddit Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scrape Reddit Posts": {
+      "main": [
+        [
+          {
+            "node": "Extract Ticker Mentions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Ticker Mentions": {
+      "main": [
+        [
+          {
+            "node": "Analyze Sentiment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Sentiment": {
+      "main": [
+        [
+          {
+            "node": "Ticker Lookup (MCP)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Market Voice Analysis",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Stock AI Brief",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ticker Lookup (MCP)": {
+      "main": [
+        [
+          {
+            "node": "Get Fundamentals",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Market Voice Analysis": {
+      "main": [
+        [
+          {
+            "node": "Get Market Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stock AI Brief": {
+      "main": [
+        [
+          {
+            "node": "Get Popular Themes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Fundamentals": {
+      "main": [
+        [
+          {
+            "node": "Stock Screener",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Market Data": {
+      "main": [
+        [
+          {
+            "node": "EDGAR 13F Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Popular Themes": {
+      "main": [
+        [
+          {
+            "node": "Economic Calendar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stock Screener": {
+      "main": [
+        [
+          {
+            "node": "Aggregate All Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "EDGAR 13F Analysis": {
+      "main": [
+        [
+          {
+            "node": "Aggregate All Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Economic Calendar": {
+      "main": [
+        [
+          {
+            "node": "Aggregate All Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate All Data": {
+      "main": [
+        [
+          {
+            "node": "Generate Alpha (FINTER MCP)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Alpha (FINTER MCP)": {
+      "main": [
+        [
+          {
+            "node": "Extract Alpha Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Alpha Code": {
+      "main": [
+        [
+          {
+            "node": "Optimize Parameters (QFlex)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Optimize Parameters (QFlex)": {
+      "main": [
+        [
+          {
+            "node": "Backtest Alpha (Simulator)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Backtest Alpha (Simulator)": {
+      "main": [
+        [
+          {
+            "node": "Analyze Backtest Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Backtest Results": {
+      "main": [
+        [
+          {
+            "node": "Check If Should Submit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check If Should Submit": {
+      "main": [
+        [
+          {
+            "node": "Submit to FINTER",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Schedule Daily Reports",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Generate Not Submitted Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Submit to FINTER": {
+      "main": [
+        [
+          {
+            "node": "Generate Final Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Daily Reports": {
+      "main": [
+        [
+          {
+            "node": "Generate Final Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2025-01-11T00:00:00.000Z",
+  "versionId": "1"
+}
