@@ -39,17 +39,36 @@ class SentimentEngine:
 
         logger.info(f"✅ Universe: {len(self.ticker_to_gvkeyiid)} securities")
 
-    def analyze_sentiment(self, text: str) -> float:
-        """Analyze sentiment (-1.0 to 1.0)"""
-        if not text or len(text.strip()) == 0:
+    def _analyze_text_sentiment(self, text: str) -> float:
+        """Analyze sentiment of a single text (-1.0 to 1.0)"""
+        if not text or len(str(text).strip()) == 0:
             return 0.0
 
         try:
-            blob = TextBlob(text)
+            blob = TextBlob(str(text))
             return round(float(blob.sentiment.polarity), 4)
         except Exception as e:
             logger.warning(f"⚠️  Sentiment failed: {e}")
             return 0.0
+
+    def analyze_sentiment(self, mentions_df: pd.DataFrame) -> pd.DataFrame:
+        """Analyze sentiment for all mentions in DataFrame"""
+        logger.info("🧠 Analyzing sentiment...")
+
+        if mentions_df.empty:
+            logger.warning("⚠️  No mentions to analyze")
+            return pd.DataFrame(columns=['ticker', 'date', 'score', 'text', 'post_id', 'sentiment'])
+
+        # Create a copy to avoid modifying original
+        result_df = mentions_df.copy()
+
+        # Analyze sentiment for each text
+        result_df['sentiment'] = result_df['text'].apply(self._analyze_text_sentiment)
+
+        logger.info(f"✅ Analyzed {len(result_df)} mentions")
+        logger.info(f"   Sentiment range: {result_df['sentiment'].min():.3f} to {result_df['sentiment'].max():.3f}")
+
+        return result_df
 
     def map_to_gvkeyiid(self, mentions_df: pd.DataFrame) -> pd.DataFrame:
         """Map Reddit tickers to FINTER gvkeyiid"""
@@ -82,8 +101,9 @@ class SentimentEngine:
         if mapped_df.empty:
             return pd.DataFrame(columns=['gvkeyiid', 'date', 'sentiment', 'mention_count', 'ticker'])
 
-        # Analyze sentiment for each mention
-        mapped_df['sentiment'] = mapped_df['text'].apply(self.analyze_sentiment)
+        # Analyze sentiment for each mention if not already done
+        if 'sentiment' not in mapped_df.columns:
+            mapped_df['sentiment'] = mapped_df['text'].apply(self._analyze_text_sentiment)
 
         # Aggregate by gvkeyiid and date
         aggregated = mapped_df.groupby(['gvkeyiid', 'date']).agg(
