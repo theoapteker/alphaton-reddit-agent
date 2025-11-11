@@ -49,6 +49,8 @@ class RedditSentimentAlpha:
         # Step 1: Get trading days from FINTER API
         trading_days = finter.get_trading_days(start, end)
         logger.info(f"📅 Trading days: {len(trading_days)}")
+        logger.info(f"   First trading day: {trading_days[0]} (type: {type(trading_days[0])})")
+        logger.info(f"   Last trading day: {trading_days[-1]} (type: {type(trading_days[-1])})")
 
         # Step 2: Filter sentiment data to requested date range
         self.sentiment_df['date'] = pd.to_datetime(self.sentiment_df['date'])
@@ -63,6 +65,10 @@ class RedditSentimentAlpha:
             # Return empty DataFrame with correct structure
             return pd.DataFrame(index=trading_days, columns=[], dtype=float)
 
+        logger.info(f"   Filtered sentiment: {len(filtered_sentiment)} records")
+        logger.info(f"   Date range in sentiment: {filtered_sentiment['date'].min()} to {filtered_sentiment['date'].max()}")
+        logger.info(f"   Unique stocks: {filtered_sentiment['gvkeyiid'].nunique()}")
+
         # Step 3: Pivot to wide format (index=date, columns=gvkeyiid, values=sentiment)
         pivot = filtered_sentiment.pivot(
             index='date',
@@ -70,8 +76,17 @@ class RedditSentimentAlpha:
             values='sentiment'
         )
 
+        # Normalize pivot index to date only (no time component)
+        pivot.index = pd.to_datetime(pivot.index).normalize()
+
+        # Normalize trading_days to date only (no time component)
+        trading_days_normalized = pd.to_datetime(trading_days).normalize()
+
         # Step 4: Reindex to trading days and forward-fill missing dates
-        aligned = pivot.reindex(trading_days).ffill(limit=5).fillna(0)
+        aligned = pivot.reindex(trading_days_normalized).ffill(limit=5).fillna(0)
+
+        logger.info(f"   Aligned shape: {aligned.shape}")
+        logger.info(f"   Non-zero values: {(aligned != 0).sum().sum()}")
 
         # Step 5: Generate position weights (long positive, short negative sentiment)
         # Normalize each row to sum to 1.0 (then scale to target AUM)
