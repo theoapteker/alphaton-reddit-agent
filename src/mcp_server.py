@@ -17,6 +17,7 @@ import uvicorn
 import logging
 import json
 import pandas as pd
+import traceback
 from datetime import datetime, timedelta
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
@@ -201,32 +202,43 @@ def generate_alpha_endpoint(request: AlphaRequest):
 
         from alpha import RedditSentimentAlpha
 
+        # Log incoming data for debugging
+        logger.info(f"   Received {len(request.sentiment_data)} sentiment records")
+        logger.info(f"   Sample record: {request.sentiment_data[0] if request.sentiment_data else 'None'}")
+
         # Convert to DataFrame
         sentiment_df = pd.DataFrame(request.sentiment_data)
+        logger.info(f"   DataFrame shape: {sentiment_df.shape}")
+        logger.info(f"   DataFrame columns: {sentiment_df.columns.tolist()}")
 
         # Create alpha
         alpha = RedditSentimentAlpha(sentiment_df, request.leverage)
 
         # Generate positions
+        logger.info(f"   Calling alpha.get({request.start_date}, {request.end_date})...")
         position = alpha.get(
             int(request.start_date),
             int(request.end_date)
         )
+        logger.info(f"   Position generated: {position.shape}")
 
         # Run validation
+        logger.info(f"   Running validation...")
         validation = alpha.validate(
             int(request.start_date),
             int(request.end_date)
         )
+        logger.info(f"   Validation complete: {validation['passed']}")
 
         # Convert position to JSON for MCP transport
+        logger.info(f"   Converting position to JSON...")
         position_json = position.to_json(orient="split", date_format="iso")
 
         result = {
             "status": "success",
             "validation_passed": validation["passed"],
             "validation_details": validation,
-            "position_shape": position.shape,
+            "position_shape": list(position.shape),  # Convert tuple to list for JSON serialization
             "position_preview": position.head().to_dict(),
             "position_json": position_json
         }
@@ -234,9 +246,12 @@ def generate_alpha_endpoint(request: AlphaRequest):
         logger.info(f"✅ Alpha generated: {position.shape}, validation: {validation['passed']}")
         return result
 
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"❌ Alpha generation failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"❌ Alpha generation failed: {type(e).__name__}: {e}")
+        logger.error(f"   Traceback:\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {str(e)}")
 
 @app.post("/tools/submit_to_finter", tags=["MCP Tools"])
 def submit_to_finter_endpoint(request: SubmitRequest):
