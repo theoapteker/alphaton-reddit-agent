@@ -10,11 +10,11 @@ This script runs the complete pipeline and submits the alpha to FINTER for live 
 5. Submit to FINTER production
 
 Usage:
-    python submit_to_finter.py --model-name reddit_sentiment_v1 --days 30
+    python submit_to_finter.py --model-name reddit_sentiment_v1 --days 7
 
 Options:
     --model-name    Name for the model (default: reddit_sentiment_v1)
-    --days          Days of historical data to analyze (default: 30)
+    --days          Days of historical data to analyze (default: 7)
     --leverage      Position leverage multiplier (default: 1.0)
     --universe      FINTER universe (default: us_stock)
     --dry-run       Run pipeline without submitting to FINTER
@@ -43,8 +43,8 @@ def main():
     parser = argparse.ArgumentParser(description='Submit Reddit Sentiment Alpha to FINTER')
     parser.add_argument('--model-name', default='reddit_sentiment_v1',
                         help='Model name for FINTER (default: reddit_sentiment_v1)')
-    parser.add_argument('--days', type=int, default=30,
-                        help='Days of historical data (default: 30)')
+    parser.add_argument('--days', type=int, default=7,
+                        help='Days of historical data (default: 7)')
     parser.add_argument('--leverage', type=float, default=1.0,
                         help='Position leverage (default: 1.0)')
     parser.add_argument('--universe', default='us_stock',

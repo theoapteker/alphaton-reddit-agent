@@ -15,15 +15,29 @@ class SentimentEngine:
         """Initialize and load FINTER universe mapping"""
         logger.info("📡 Loading universe mapping...")
 
-        self.universe_df = finter.get_universe()
+        # Hardcoded mapping for the 50 stocks we have keys for
+        # Format: gvkey (6 digits) + iid (3 digits) = gvkeyiid (9 digits)
+        self.ticker_to_gvkeyiid = {
+            'HON': '001300001', 'AMD': '001161001', 'AMGN': '001602001',
+            'AAPL': '001690001', 'BRK.B': '002176002', 'JPM': '002968001',
+            'CVX': '002991001', 'CAT': '002817001', 'KO': '003144001',
+            'DIS': '003980001', 'XOM': '004503001', 'GE': '005047001',
+            'HD': '005680001', 'JNJ': '006266001', 'INTC': '006008001',
+            'IBM': '006066001', 'LRCX': '006565001', 'LLY': '006730001',
+            'BAC': '007647001', 'MCD': '007154001', 'MRK': '007257001',
+            'WFC': '008007001', 'NKE': '007906001', 'PEP': '008479001',
+            'T': '009899001', 'ABBV': '016101001', 'PG': '008762001',
+            'TXN': '010499001', 'TMO': '010530001', 'UNH': '010903001',
+            'MSFT': '012141001', 'ORCL': '012142001', 'LIN': '025124001',
+            'QCOM': '024800001', 'BABA': '020530090', 'ANET': '020748001',
+            'UBER': '035077001', 'WMT': '011259001', 'COST': '029028001',
+            'ASML': '061214090', 'AMZN': '064768001', 'NFLX': '147579001',
+            'NVDA': '117768001', 'V': '179534001', 'MA': '160225001',
+            'GOOGL': '160329001', 'META': '170617001', 'CRM': '157855001',
+            'TSLA': '184996001', 'AVGO': '180711001'
+        }
 
-        # Create mapping: ticker -> gvkeyiid
-        self.ticker_to_gvkeyiid = dict(zip(
-            self.universe_df['tic'].astype(str),
-            self.universe_df['gvkeyiid'].astype(str)
-        ))
-
-        logger.info(f"✅ Loaded {len(self.ticker_to_gvkeyiid)} ticker mappings")
+        logger.info(f"✅ Universe: {len(self.ticker_to_gvkeyiid)} securities")
 
     def analyze_sentiment(self, text: str) -> float:
         """Analyze sentiment (-1.0 to 1.0)"""
